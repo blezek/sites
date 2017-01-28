@@ -283,6 +283,7 @@ class stepOperationMenu extends MenuPanel {
     options.performFilter = options.performFilter || function(){};
     options.performGrowCut = options.performGrowCut || function(){};
     options.performGaussian = options.performGaussian || function(){};
+    options.performThreshold = options.performThreshold || function(){};
     super(application, {title: 'Operations'});
 
     let option;
@@ -311,6 +312,15 @@ class stepOperationMenu extends MenuPanel {
     option.setTextContent( 'Bilateral' );
     option.onClick( function () {
       options.performBilateral();
+    } );
+    this.menuPanel.add( option );
+
+    // Operations -> threshold
+    option = new UI.Row();
+    option.setClass( 'option' );
+    option.setTextContent( 'Threshold' );
+    option.onClick( function () {
+      options.performThreshold();
     } );
     this.menuPanel.add( option );
 

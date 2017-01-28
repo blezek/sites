@@ -769,3 +769,292 @@ SegmentationField.fieldsFromDataset = function(options) {
   });
   return (fields);
 }
+
+
+
+// 8-bit segmentation object
+class FractionalSegmentationField extends PixelField {
+  constructor(options={}) {
+    super(options);
+    this.analyze();
+  }
+
+  analyze() {
+    super.analyze();
+
+    if (this.dataset.BitsAllocated != 8) {
+      console.warn(this, 'Can only render 8 bit data');
+    }
+    let sharedGroups = this.dataset.SharedFunctionalGroups;
+    let pixelMeasures = sharedGroups.PixelMeasures;
+    if (pixelMeasures.SpacingBetweenSlices != pixelMeasures.SliceThickness) {
+      console.warn('SpacingBetweenSlices and SliceThickness should be equal for SEG');
+      console.warn(pixelMeasures.SpacingBetweenSlices + ' != ' + pixelMeasures.SliceThickness);
+    }
+    this.rgb = Colors.dicomlab2RGB(this.dataset.Segment[0].RecommendedDisplayCIELabValue);
+  }
+
+  uniforms() {
+    let u = super.uniforms();
+    u['rgb'+this.id] = {type: '3fv', value: this.rgb};
+    return(u);
+  }
+
+  samplingShaderSource() {
+    return(`
+      uniform highp ${this.samplerType} textureUnit${this.id};
+
+      vec3 transformPoint${this.id}(const in vec3 samplePoint)
+      {
+        return(samplePoint);
+      }
+
+      void transferFunction${this.id} (const in float sampleValue,
+                                       const in float gradientMagnitude,
+                                       out vec3 color,
+                                       out float opacity)
+      {
+        float pixelValue = sampleValue / 255.;
+        pixelValue = clamp( pixelValue, 0., 1. );
+        color = vec3(pixelValue);
+        opacity = gradientMagnitude * pixelValue / 1000.; // TODO
+      }
+
+      uniform int visible${this.id};
+      uniform mat4 patientToPixel${this.id};
+      uniform mat3 normalPixelToPatient${this.id};
+      uniform ivec3 pixelDimensions${this.id};
+      void sampleField${this.id} (const in ${this.samplerType} textureUnit,
+                                  const in vec3 samplePointIn,
+                                  const in float gradientSize,
+                                  out float sampleValue,
+                                  out vec3 normal,
+                                  out float gradientMagnitude)
+      {
+        // samplePoint is in patient coordinates
+        vec3 samplePoint = transformPoint${this.id}(samplePointIn);
+
+        // stpPoint is in 0-1 texture coordinates, meaning that it
+        // is the patientToPixel transform scaled by the inverse
+        // pixel dimensions.
+        vec3 pixelDimensions = vec3(pixelDimensions${this.id});
+        vec3 dimensionsInverse = vec3(1.) / pixelDimensions;
+        vec3 stpPoint = (patientToPixel${this.id} * vec4(samplePoint, 1.)).xyz;
+        stpPoint *= dimensionsInverse;
+
+        // trivial reject outside
+        if (any(lessThan(stpPoint, vec3(0.)))
+             || any(greaterThan(stpPoint,vec3(1.)))) {
+            sampleValue = 0.;
+            normal = vec3(0.);
+            gradientMagnitude = 0.;
+            return;
+        }
+
+        #define SAMPLE(p) RESCALE(float( texture(textureUnit, p).r ))
+
+        // central difference sample gradient (P is +1, N is -1)
+        // p : point in patient space
+        // o : offset vector in patient space along dimension
+        vec3 sN = vec3(0.);
+        vec3 sP = vec3(0.);
+        vec3 offset = vec3(0.);
+        for (int i = 0; i < 3; i++) {
+          offset[i] = dimensionsInverse[i];
+          sP[i] = float(texture(textureUnit,stpPoint + offset).r);
+          offset[i] = -dimensionsInverse[i];
+          sN[i] = float(texture(textureUnit,stpPoint + offset).r);
+          offset[i] = 0.;
+        }
+        vec3 gradient = vec3( (sP[0]-sN[0]),
+                              (sP[1]-sN[1]),
+                              (sP[2]-sN[2]) );
+        gradientMagnitude = length(gradient);
+        normal = gradient * 1./gradientMagnitude;
+
+        float middleValue = float(texture(textureUnit,stpPoint).r);
+
+        // account for within-voxel address (fractional coordinates)
+        // weight is 1. at center of voxel, 0.5 at edges
+        float smoothValue = 0.;
+        float weight;
+        for (int i = 0; i < 3; i++) {
+          float fraction = fract(stpPoint[i] * pixelDimensions[i]);
+          if (fraction < 0.5) {
+            weight = 0.5 + fraction;
+            smoothValue += (1. - weight) * middleValue + weight * sN[i];
+          } else {
+            weight = 1.5 - fraction;
+            smoothValue += (1. - weight) * middleValue + weight * sP[i];
+          }
+        }
+
+        sampleValue = smoothValue/3.;
+      }
+    `);
+  }
+
+  fieldToTexture(gl) {
+    // allocate and fill a float 3D texture for the image data.
+    // cannot be subclassed.
+    let needsUpdate = super.fieldToTexture(gl);
+    if (needsUpdate) {
+      let imageArray;
+      imageArray = new Int8Array(this.dataset.PixelData);
+
+      let imageTextureArray;
+      let pixelFormat;
+      let pixelTarget;
+      let pixelType;
+      let textureFilters;
+      if (this.useIntegerTextures) {
+        imageTextureArray = new Int8Array(imageArray);
+        pixelFormat = gl.R8;
+        pixelTarget = gl.RED_INTEGER;
+        pixelType = gl.CHAR;
+        textureFilters = gl.NEAREST;
+      } else {
+        imageTextureArray = new Float32Array(imageArray);
+        pixelFormat = gl.R32F;
+        pixelTarget = gl.RED;
+        pixelType = gl.FLOAT;
+        textureFilters = gl.LINEAR;
+      }
+
+      let [w,h,d] = this.pixelDimensions;
+      gl.texStorage3D(gl.TEXTURE_3D, 1, pixelFormat, w, h, d);
+      if (!this.generator) {
+        // only transfer the data if there's no generator that will fill it in
+        gl.texSubImage3D(gl.TEXTURE_3D,
+                         0, 0, 0, 0, // level, offsets
+                         w, h, d,
+                         pixelTarget, pixelType, imageTextureArray);
+      }
+      gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, textureFilters);
+      gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, textureFilters);
+      this.updated();
+    }
+  }
+}
+
+SegmentationField.fieldsFromDataset = function(options) {
+  // make one dataset per segment and a corresponding field
+  // Always use 1-based indexing for segmentNumber
+  if (!options.dataset) {
+    return [];
+  }
+  if (options.dataset.NumberOfFrames != options.dataset.PerFrameFunctionalGroups.length) {
+    console.error('Number of frames does not match number of functional groups');
+  }
+  let fields = [];
+  // first, make a new dataset per segment
+  let segmentDatasets = ["Empty Dataset 0"];
+  let jsonDataset = JSON.stringify(options.dataset);
+  let segments = options.dataset.Segment;
+  if (!(segments.length > 0)) {
+    segments = [options.dataset.Segment];
+  }
+  segments.forEach(segment => {
+    let segmentDataset = JSON.parse(jsonDataset);
+    segmentDataset.Segment = [segment];
+    segmentDatasets.push(segmentDataset);
+  });
+  // next make a list of frames per segment
+  let segmentGroupLists = ["Empty GroupList 0"];
+  options.dataset.PerFrameFunctionalGroups.forEach(functionalGroup => {
+    let segmentNumber = functionalGroup.SegmentIdentification.ReferencedSegmentNumber;
+    if (!segmentGroupLists[segmentNumber]) {
+      segmentGroupLists[segmentNumber] = [];
+    }
+    // this will be segment 1 of new dataset
+    functionalGroup.SegmentIdentification.ReferencedSegmentNumber = 1;
+    segmentGroupLists[segmentNumber].push(functionalGroup);
+  });
+  // determine per-segment index into the pixel data
+  // TODO: only handles one-bit-per pixel, last byte padded
+  let frameSize = Math.ceil(options.dataset.Rows * options.dataset.Columns / 8);
+  let segmentOffsets = ["Empty offset 0", 0];
+  let segmentSizes = ["Empty size 0"];
+  segmentGroupLists.slice(1).forEach(segmentGroupList => {
+    let previousOffset = segmentOffsets[segmentOffsets.length-1];
+    let numberOfFrames = segmentGroupList.length;
+    segmentOffsets.push(previousOffset + frameSize * numberOfFrames);
+    segmentSizes.push(frameSize * numberOfFrames);
+  });
+  // Now make new per-frame functional groups and pixel data for each dataset
+  // (skipping the first known-to-be-empty segment)
+  // TODO: assumes frames are sorted and first frame is origin WRT slice direction
+  let segmentNumber = 1;
+  segmentGroupLists.slice(1).forEach(segmentGroupList => {
+    let dataset = segmentDatasets[segmentNumber];
+    dataset.PerFrameFunctionalGroups = segmentGroupList;
+    let begin = segmentOffsets[segmentNumber];
+    let end = begin + segmentSizes[segmentNumber];
+    dataset.NumberOfFrames = segmentGroupLists[segmentNumber].length;
+    dataset.PixelData = options.dataset.PixelData.slice(begin, end);
+    fields.push(new SegmentationField({dataset}));
+    segmentNumber++;
+  });
+  return (fields);
+}
+
+FractionalSegmentationField.fieldsFromDataset = function(options) {
+  // make one dataset per segment and a corresponding field
+  // Always use 1-based indexing for segmentNumber
+  if (!options.dataset) {
+    return [];
+  }
+  if (options.dataset.NumberOfFrames != options.dataset.PerFrameFunctionalGroups.length) {
+    console.error('Number of frames does not match number of functional groups');
+  }
+  let fields = [];
+  // first, make a new dataset per segment
+  let segmentDatasets = ["Empty Dataset 0"];
+  let jsonDataset = JSON.stringify(options.dataset);
+  let segments = options.dataset.Segment;
+  if (!(segments.length > 0)) {
+    segments = [options.dataset.Segment];
+  }
+  segments.forEach(segment => {
+    let segmentDataset = JSON.parse(jsonDataset);
+    segmentDataset.Segment = [segment];
+    segmentDatasets.push(segmentDataset);
+  });
+  // next make a list of frames per segment
+  let segmentGroupLists = ["Empty GroupList 0"];
+  options.dataset.PerFrameFunctionalGroups.forEach(functionalGroup => {
+    let segmentNumber = functionalGroup.SegmentIdentification.ReferencedSegmentNumber;
+    if (!segmentGroupLists[segmentNumber]) {
+      segmentGroupLists[segmentNumber] = [];
+    }
+    // this will be segment 1 of new dataset
+    functionalGroup.SegmentIdentification.ReferencedSegmentNumber = 1;
+    segmentGroupLists[segmentNumber].push(functionalGroup);
+  });
+  // determine per-segment index into the pixel data
+  // TODO: only handles one-bit-per pixel, last byte padded
+  let frameSize = Math.ceil(options.dataset.Rows * options.dataset.Columns / 8);
+  let segmentOffsets = ["Empty offset 0", 0];
+  let segmentSizes = ["Empty size 0"];
+  segmentGroupLists.slice(1).forEach(segmentGroupList => {
+    let previousOffset = segmentOffsets[segmentOffsets.length-1];
+    let numberOfFrames = segmentGroupList.length;
+    segmentOffsets.push(previousOffset + frameSize * numberOfFrames);
+    segmentSizes.push(frameSize * numberOfFrames);
+  });
+  // Now make new per-frame functional groups and pixel data for each dataset
+  // (skipping the first known-to-be-empty segment)
+  // TODO: assumes frames are sorted and first frame is origin WRT slice direction
+  let segmentNumber = 1;
+  segmentGroupLists.slice(1).forEach(segmentGroupList => {
+    let dataset = segmentDatasets[segmentNumber];
+    dataset.PerFrameFunctionalGroups = segmentGroupList;
+    let begin = segmentOffsets[segmentNumber];
+    let end = begin + segmentSizes[segmentNumber];
+    dataset.NumberOfFrames = segmentGroupLists[segmentNumber].length;
+    dataset.PixelData = options.dataset.PixelData.slice(begin, end);
+    fields.push(new FractionalSegmentationField({dataset}));
+    segmentNumber++;
+  });
+  return (fields);
+}

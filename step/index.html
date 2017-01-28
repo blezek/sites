@@ -34,6 +34,7 @@
   <script type="text/javascript" src="./growcut.js"></script>
   <script type="text/javascript" src="./gaussian.js"></script>
   <script type="text/javascript" src="./bilateral.js"></script>
+  <script type="text/javascript" src="./threshold.js"></script>
 
 
   <link rel="stylesheet" href="./css/step.css" />
@@ -226,6 +227,43 @@ function performImageFilter( generator ) {
  function performBilateral() {
    performImageFilter(BilateralGenerator);
  }
+
+function performThreshold() {
+  /* performImageFilter(ThresholdGenerator)*/
+  let filterField = step.renderer.inputFields[step.renderer.inputFields.length-1];
+  if (!filterField || filterField.constructor.name != "ImageField") {
+    alert('Need to load an image field');
+    return;
+  }
+  let derivedImage = new DerivedFractionalSegmentation([filterField.dataset]);
+  let derivedField0 = FractionalSegmentationField.fieldsFromDataset({dataset: derivedImage.dataset})[0];
+
+  step.renderer.inputFields = [filterField, derivedField0];
+  step.renderer.updateProgram();
+
+  step.generator = new ThresholdGenerator({
+    gl: step.renderer.gl,
+    inputFields: [filterField],
+    outputFields: [derivedField0],
+  });
+
+  step.generator.gl = step.renderer.gl;
+  step.generator.inputFields = [filterField];
+  step.generator.outputFields = [derivedField0];
+  
+  step.generator.updateProgram();
+
+  let animationFrame = function() {
+    console.log(`image filtering`);
+    step.generator.generate();
+    step.renderer._render();
+    derivedField0.visible = 1;
+    step.renderer.requestRender(step.view);
+  }
+  requestAnimationFrame(animationFrame);
+
+  step.renderer.requestRender(step.view);
+}
 
 
  function performFilter() {
@@ -452,6 +490,7 @@ $(function () {
     performFilter : performFilter,
     performGrowCut : performGrowCut,
     performGaussian : performGaussian,  
+    performThreshold : performThreshold,  
     performBilateral : performBilateral,  
     addRandomFiducials : addRandomFiducials,
     save : saveFieldsAsDICOM,
