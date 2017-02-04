@@ -45,14 +45,30 @@
 
   <script type="text/javascript" src="./chronicle.js"></script>
 
+  <!-- DJB: use the ACE editor -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.2.6/ace.js"></script>
+  <style type="text/css" media="screen">
+   #editor { 
+     position: absolute;
+     top: 20%;
+     right: 10%;
+     bottom: 10%;
+     left: 10%;
+     display: none;
+   }
+  </style>
+  
 </head>
 
 <body>
 
 <canvas id="renderCanvas"></canvas>
-
+<div id="editor">Some text here</div>
+<script src="/ace-builds/src-noconflict/ace.js" type="text/javascript" charset="utf-8"></script>
 <script>
 'use strict'
+
+
 
 function addRandomFiducials() {
   //
@@ -207,6 +223,7 @@ function performImageFilter( generator ) {
   step.generator.outputFields = [derivedField0];
      
   step.generator.updateProgram();
+  step.editor.setValue(step.generator.fragmentShaderSource);
 
   let animationFrame = function() {
     console.log(`image filtering`);
@@ -252,7 +269,8 @@ function performThreshold() {
   step.generator.outputFields = [derivedField0];
   
   step.generator.updateProgram();
-
+  step.editor.setValue(step.generator.fragmentShaderSource);
+  
   let animationFrame = function() {
     console.log(`image filtering`);
     step.generator.generate();
@@ -292,8 +310,9 @@ function performThreshold() {
          outputFields: [derivedField0, derivedField1],
      });
      step.generator.updateProgram();
-
      let iterations = 20;
+     step.editor.setValue(step.generator.fragmentShaderSource);
+   
      let iteration = 0;
      let renderRate = 1;
      let animationFrame = function() {
@@ -365,6 +384,7 @@ function performGrowCut() {
       step.growcut.outputFields = [labelFields[outBuffer],
                                    strengthFields[outBuffer]];
       step.growcut.updateProgram();
+      step.editor.setValue(step.generator.fragmentShaderSource);
     }
     step.growcut.uniforms.iteration.value = iteration;
 
@@ -518,6 +538,60 @@ $(function () {
   step.controls.activate({
     onWindowLevel: step.ui.sideBar.drawHistogram
   });
+
+
+  // DJB: Add display of shaders.  Also load data when the page loads, and run threshold.
+  
+  // Add a 'Utilities' menu to show GLSL source
+  let editor = ace.edit("editor");
+  editor.setTheme("ace/theme/monokai");
+  editor.getSession().setMode("ace/mode/glsl");
+  step.editor = editor;
+
+  let menu = new MenuPanel ( step, {title: "Utilities"});
+  step.ui.menubar.container.add ( menu.container );
+  let option = new UI.Row();
+  option.setClass( 'option' );
+  option.setTextContent( 'Vertex Shader' );
+    option.onClick( function () {
+      editor.setValue ( step.renderer.fragmentShaderSource )
+    $('#editor').toggle();
+  } );
+  menu.menuPanel.add( option );
+
+  option = new UI.Row();
+  option.setClass( 'option' );
+  option.setTextContent( 'Fragment Shader' );
+  option.onClick( function () {
+    editor.setValue ( step.renderer.vertexShaderSource )
+    $('#editor').toggle();
+  } );
+  menu.menuPanel.add( option );
+
+  option = new UI.Row();
+  option.setClass( 'option' );
+  option.setTextContent( 'Generator Shader' );
+  option.onClick( function () {
+    $('#editor').toggle();
+  } );
+  menu.menuPanel.add( option );
+  
+
+  
+  // DJB: load some data and filter
+  let seriesKey = '[["UnspecifiedInstitution","99000"],["UnspecifiedStudyDescription","1.2.392.200103.20080913.113635.0.2009.6.22.21.43.10.22941.1"],["CT","UnspecifiedSeriesDescription","1.2.392.200103.20080913.113635.1.2009.6.22.21.43.10.23430.1"]]';
+
+  step.chronicle.seriesOperation({
+    chronicle: step.chronicle,
+    key: JSON.parse(seriesKey),
+    operation: function(s) {
+      console.log("Loaded");
+      requestSeries(s);
+    }
+  });
+  // run the threshold after a delay
+  setTimeout (performThreshold, 2000);
+
 
 });
 
