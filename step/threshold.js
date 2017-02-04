@@ -11,7 +11,6 @@ class ThresholdGenerator extends FilterGenerator {
   updateProgram() {
     // recreate the program and textures for the current field list
     super.updateProgram();
-    let gl = this.gl;
   }
 
   _fragmentShaderSource() {
@@ -56,12 +55,9 @@ class ThresholdGenerator extends FilterGenerator {
       void main()
       {
         int background = texture(inputTexture0, interpolatedTextureCoordinate).r;
-        if ( background > 200 ) {
-          value = 200;
-        } else {
-          value = 0;
-        }
-        // value = 100;
+        // Threshold
+        float threshold = 1200;
+        value = background * int ( step ( threshold, float(background) ) );
       }
  
     `);
