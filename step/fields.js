@@ -899,8 +899,6 @@ class FractionalSegmentationField extends PixelField {
     // cannot be subclassed.
     let needsUpdate = super.fieldToTexture(gl);
     if (needsUpdate) {
-      let imageArray;
-      imageArray = new Int8Array(this.dataset.PixelData);
 
       let imageTextureArray;
       let pixelFormat;
@@ -908,13 +906,26 @@ class FractionalSegmentationField extends PixelField {
       let pixelType;
       let textureFilters;
       if (this.useIntegerTextures) {
-        imageTextureArray = new Int8Array(imageArray);
-        pixelFormat = gl.R8;
+
+        // NB: would have liked to use unsigned 8-bit for FractionalSegmentationField
+        // but WebGL2 did not like an 8-bit buffer with an integer output, though
+        // a short output works just fine.
+        // imageTextureArray = new Uint8Array(this.dataset.PixelData);
+        // pixelFormat = gl.R8;
+        // pixelTarget = gl.RED_INTEGER;
+        // pixelType = gl.UNSIGNED_BYTE;
+        // textureFilters = gl.NEAREST;
+
+        console.log ( "Falling back to 16 bit to see if it works");
+        imageTextureArray = new Int16Array(this.dataset.PixelData);
+        pixelFormat = gl.R16I;
         pixelTarget = gl.RED_INTEGER;
-        pixelType = gl.CHAR;
+        pixelType = gl.SHORT;
         textureFilters = gl.NEAREST;
+        
+
       } else {
-        imageTextureArray = new Float32Array(imageArray);
+        imageTextureArray = new Float32Array(this.dataset.PixelData);
         pixelFormat = gl.R32F;
         pixelTarget = gl.RED;
         pixelType = gl.FLOAT;
