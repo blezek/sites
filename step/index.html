@@ -64,7 +64,6 @@
 
 <canvas id="renderCanvas"></canvas>
 <div id="editor">Some text here</div>
-<script src="/ace-builds/src-noconflict/ace.js" type="text/javascript" charset="utf-8"></script>
 <script>
 'use strict'
 
@@ -223,7 +222,7 @@ function performImageFilter( generator ) {
   step.generator.outputFields = [derivedField0];
      
   step.generator.updateProgram();
-  step.editor.setValue(step.generator.fragmentShaderSource);
+  step.lastGeneratorShader = step.generator.fragmentShaderSource;
 
   let animationFrame = function() {
     console.log(`image filtering`);
@@ -269,7 +268,7 @@ function performThreshold() {
   step.generator.outputFields = [derivedField0];
   
   step.generator.updateProgram();
-  step.editor.setValue(step.generator.fragmentShaderSource);
+  step.lastGeneratorShader = step.generator.fragmentShaderSource;
   
   let animationFrame = function() {
     console.log(`image filtering`);
@@ -311,7 +310,7 @@ function performThreshold() {
      });
      step.generator.updateProgram();
      let iterations = 20;
-     step.editor.setValue(step.generator.fragmentShaderSource);
+     step.lastGeneratorShader = step.generator.fragmentShaderSource;
    
      let iteration = 0;
      let renderRate = 1;
@@ -384,7 +383,7 @@ function performGrowCut() {
       step.growcut.outputFields = [labelFields[outBuffer],
                                    strengthFields[outBuffer]];
       step.growcut.updateProgram();
-      step.editor.setValue(step.generator.fragmentShaderSource);
+      step.lastGeneratorShader = step.generator.fragmentShaderSource;
     }
     step.growcut.uniforms.iteration.value = iteration;
 
@@ -451,7 +450,8 @@ let step = {
     renderCanvasHeight: { type: '1f', value: 512 },
     sliceMode: { type: '1i', value: 1 },
   },
-};
+  lastGeneratorShader : "",
+ };
 // once document is loaded...
 $(function () {
 
@@ -555,8 +555,8 @@ $(function () {
   option.setTextContent( 'Vertex Shader' );
     option.onClick( function () {
       editor.setValue ( step.renderer.fragmentShaderSource )
-    $('#editor').toggle();
-  } );
+      $('#editor').toggle();
+    } );
   menu.menuPanel.add( option );
 
   option = new UI.Row();
@@ -572,6 +572,7 @@ $(function () {
   option.setClass( 'option' );
   option.setTextContent( 'Generator Shader' );
   option.onClick( function () {
+    editor.setValue ( step.lastGeneratorShader )
     $('#editor').toggle();
   } );
   menu.menuPanel.add( option );

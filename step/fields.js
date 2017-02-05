@@ -802,6 +802,9 @@ class FractionalSegmentationField extends PixelField {
 
   samplingShaderSource() {
     return(`
+
+      // FractionalSegmentationField begin
+
       uniform highp ${this.samplerType} textureUnit${this.id};
 
       vec3 transformPoint${this.id}(const in vec3 samplePoint)
@@ -891,6 +894,9 @@ class FractionalSegmentationField extends PixelField {
 
         sampleValue = smoothValue/3.;
       }
+
+      // FractionalSegmentationField end
+
     `);
   }
 
