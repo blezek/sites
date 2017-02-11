@@ -20,9 +20,7 @@ class ThresholdGenerator extends FilterGenerator {
 
       // Threshold
       //
-      // Filter inputTexture0 using a threshold filter.  This is a single pass algorithm,
-      // with fixed sigmas for intensity and range.
-      //
+      // Filter inputTexture0 using a threshold filter.
 
 
       // these are the function definitions for sampleVolume*
@@ -55,9 +53,20 @@ class ThresholdGenerator extends FilterGenerator {
       void main()
       {
         int background = texture(inputTexture0, interpolatedTextureCoordinate).r;
-        // Threshold
+        float lowerThreshold = 1000.0;
         float threshold = 1200.0;
-        value = background * int ( step ( threshold, float(background) ) );
+        value = int ( float(background) * smoothstep ( lowerThreshold, threshold, float(background) ) );
+
+
+/*
+
+        float background = float ( texture(inputTexture0, interpolatedTextureCoordinate).r );
+        // Threshold
+        float lowerThreshold = 1000.0;
+        float threshold = 1200.0;
+
+        value = int ( background * smoothstep ( lowerThreshold, threshold, background ) );
+*/
       }
  
     `);
