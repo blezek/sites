@@ -220,14 +220,16 @@ function performImageFilter( generator ) {
   step.generator.gl = step.renderer.gl;
   step.generator.inputFields = [filterField];
   step.generator.outputFields = [derivedField0];
-     
+  
   step.generator.updateProgram();
   step.lastGeneratorShader = step.generator.fragmentShaderSource;
 
   let animationFrame = function() {
-    console.log(`image filtering`);
     step.generator.generate();
+    let start = Date.now();
     step.renderer._render();
+    let elapsedTimeInSeconds = (Date.now() - start) / 1000.;
+    console.log(`image filtering ${elapsedTimeInSeconds}`);
     derivedField0.visible = 1;
     step.renderer.requestRender(step.view);
   }
@@ -236,13 +238,13 @@ function performImageFilter( generator ) {
   step.renderer.requestRender(step.view);
 }
 
- function performGaussian() {
-   performImageFilter(GaussianGenerator);
- }
+function performGaussian() {
+  performImageFilter(GaussianGenerator);
+}
 
- function performBilateral() {
-   performImageFilter(BilateralGenerator);
- }
+function performBilateral() {
+  performImageFilter(BilateralGenerator);
+}
 
 function performThreshold() {
   /* performImageFilter(ThresholdGenerator)*/
@@ -283,60 +285,60 @@ function performThreshold() {
 }
 
 
- function performFilter() {
-     let filterField = step.renderer.inputFields[step.renderer.inputFields.length-1];
-     if (!filterField || filterField.constructor.name != "ImageField") {
-         alert('Need to load an image field');
-         return;
-     }
+function performFilter() {
+  let filterField = step.renderer.inputFields[step.renderer.inputFields.length-1];
+  if (!filterField || filterField.constructor.name != "ImageField") {
+    alert('Need to load an image field');
+    return;
+  }
 
-     let derivedImage = new DerivedImage([filterField.dataset]);
-     let derivedField0 = Field.fromDataset(derivedImage.dataset)[0];
-     let derivedField1 = Field.fromDataset(derivedImage.dataset)[0];
+  let derivedImage = new DerivedImage([filterField.dataset]);
+  let derivedField0 = Field.fromDataset(derivedImage.dataset)[0];
+  let derivedField1 = Field.fromDataset(derivedImage.dataset)[0];
 
-     // override default calculation
-     derivedField0.windowCenter = filterField.windowCenter;
-     derivedField0.windowWidth = filterField.windowWidth;
-     derivedField1.windowCenter = filterField.windowCenter;
-     derivedField1.windowWidth = filterField.windowWidth;
+  // override default calculation
+  derivedField0.windowCenter = filterField.windowCenter;
+  derivedField0.windowWidth = filterField.windowWidth;
+  derivedField1.windowCenter = filterField.windowCenter;
+  derivedField1.windowWidth = filterField.windowWidth;
 
-     step.renderer.inputFields = [filterField, derivedField0, derivedField1];
-     step.renderer.updateProgram();
+  step.renderer.inputFields = [filterField, derivedField0, derivedField1];
+  step.renderer.updateProgram();
 
-     step.generator = new ProgrammaticGenerator({
-         gl: step.renderer.gl,
-         inputFields: [filterField],
-         outputFields: [derivedField0, derivedField1],
-     });
-     step.generator.updateProgram();
-     let iterations = 20;
-     step.lastGeneratorShader = step.generator.fragmentShaderSource;
-   
-     let iteration = 0;
-     let renderRate = 1;
-     let animationFrame = function() {
-         console.log(`iteration ${iteration} of ${iterations}`);
-         step.generator.uniforms.amplitude.value = iteration;
-         step.generator.uniforms.frequency.value = 30.;
-         step.generator.generate();
-         if (iteration % renderRate == 0) {
-             step.renderer._render();
-         }
-         iteration++;
-         if (iteration < iterations) {
-             derivedField0.visible = (iteration+1) % 2;
-             derivedField1.visible = iteration % 2;
-             requestAnimationFrame(animationFrame);
-         } else {
-             derivedField0.visible = 1;
-             derivedField1.visible = 1;
-             step.renderer.requestRender(step.view);
-         }
-     }
-     requestAnimationFrame(animationFrame);
+  step.generator = new ProgrammaticGenerator({
+    gl: step.renderer.gl,
+    inputFields: [filterField],
+    outputFields: [derivedField0, derivedField1],
+  });
+  step.generator.updateProgram();
+  let iterations = 20;
+  step.lastGeneratorShader = step.generator.fragmentShaderSource;
+  
+  let iteration = 0;
+  let renderRate = 1;
+  let animationFrame = function() {
+    console.log(`iteration ${iteration} of ${iterations}`);
+    step.generator.uniforms.amplitude.value = iteration;
+    step.generator.uniforms.frequency.value = 30.;
+    step.generator.generate();
+    if (iteration % renderRate == 0) {
+      step.renderer._render();
+    }
+    iteration++;
+    if (iteration < iterations) {
+      derivedField0.visible = (iteration+1) % 2;
+      derivedField1.visible = iteration % 2;
+      requestAnimationFrame(animationFrame);
+    } else {
+      derivedField0.visible = 1;
+      derivedField1.visible = 1;
+      step.renderer.requestRender(step.view);
+    }
+  }
+  requestAnimationFrame(animationFrame);
 
-     step.renderer.requestRender(step.view);
- }
+  step.renderer.requestRender(step.view);
+}
 
 
 function performGrowCut() {
@@ -451,7 +453,7 @@ let step = {
     sliceMode: { type: '1i', value: 1 },
   },
   lastGeneratorShader : "",
- };
+};
 // once document is loaded...
 $(function () {
 
@@ -541,7 +543,12 @@ $(function () {
 
 
   // DJB: Add display of shaders.  Also load data when the page loads, and run threshold.
-  
+
+  let jumpToTop = function () {
+    let editor = step.editor;
+    editor.resize(true);
+    editor.scrollToLine(1, true, true, function () {});
+  }
   // Add a 'Utilities' menu to show GLSL source
   let editor = ace.edit("editor");
   editor.setTheme("ace/theme/monokai");
@@ -553,10 +560,11 @@ $(function () {
   let option = new UI.Row();
   option.setClass( 'option' );
   option.setTextContent( 'Vertex Shader' );
-    option.onClick( function () {
-      editor.setValue ( step.renderer.fragmentShaderSource )
-      $('#editor').toggle();
-    } );
+  option.onClick( function () {
+    editor.setValue ( step.renderer.fragmentShaderSource )
+    $('#editor').toggle();
+    jumpToTop();
+  } );
   menu.menuPanel.add( option );
 
   option = new UI.Row();
@@ -565,6 +573,7 @@ $(function () {
   option.onClick( function () {
     editor.setValue ( step.renderer.vertexShaderSource )
     $('#editor').toggle();
+    jumpToTop();
   } );
   menu.menuPanel.add( option );
 
@@ -574,6 +583,7 @@ $(function () {
   option.onClick( function () {
     editor.setValue ( step.lastGeneratorShader )
     $('#editor').toggle();
+    jumpToTop();
   } );
   menu.menuPanel.add( option );
   
@@ -582,17 +592,21 @@ $(function () {
   // DJB: load some data and filter
   let seriesKey = '[["UnspecifiedInstitution","99000"],["UnspecifiedStudyDescription","1.2.392.200103.20080913.113635.0.2009.6.22.21.43.10.22941.1"],["CT","UnspecifiedSeriesDescription","1.2.392.200103.20080913.113635.1.2009.6.22.21.43.10.23430.1"]]';
 
-  step.chronicle.seriesOperation({
-    chronicle: step.chronicle,
-    key: JSON.parse(seriesKey),
-    operation: function(s) {
-      console.log("Loaded");
-      requestSeries(s);
-    }
-  });
-  // run the threshold after a delay
-  setTimeout (performThreshold, 2000);
+  seriesKey = '[["UnspecifiedInstitution","99000"],["UnspecifiedStudyDescription","1.2.392.200103.20080913.113635.0.2009.6.22.21.43.10.22941.1"],["CT","UnspecifiedSeriesDescription","1.2.392.200103.20080913.113635.1.2009.6.22.21.43.10.23430.1"]]';
 
+  seriesKey = '[["UnspecifiedInstitution","QIN-HEADNECK-01-0003"],["Thorax^1HEAD_NECK_PETCT","1.3.6.1.4.1.14519.5.2.1.2744.7002.150059977302243314164020079415"],["CT","CT WB 5.0 B40s_CHEST","1.3.6.1.4.1.14519.5.2.1.2744.7002.248974378224961074547541151175"]]';
+  
+  /* step.chronicle.seriesOperation({
+   *   chronicle: step.chronicle,
+   *   key: JSON.parse(seriesKey),
+   *   operation: function(s) {
+   *     console.log("Loaded");
+   *     requestSeries(s);
+   *   }
+   * });
+   * // run the threshold after a delay
+   * setTimeout (performBilateral, 4000);
+   */
 
 });
 

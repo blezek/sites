@@ -55,7 +55,7 @@ class ThresholdGenerator extends FilterGenerator {
         int background = texture(inputTexture0, interpolatedTextureCoordinate).r;
         float lowerThreshold = 1000.0;
         float threshold = 1200.0;
-        value = int ( float(background) * smoothstep ( lowerThreshold, threshold, float(background) ) );
+        value = int ( 255.0 * smoothstep ( lowerThreshold, threshold, float(background) ) );
 
 
 /*

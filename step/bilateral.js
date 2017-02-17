@@ -15,8 +15,9 @@ class BilateralGenerator extends FilterGenerator {
   }
 
   _fragmentShaderSource() {
-    console.log ( "Bilateral brute..." );
-
+    let range = 10;
+    let sigma_px = 3.5;
+    console.log ( `Bilateral brute... range = ${range} sigma_px = ${sigma_px}` );
     return (`${this.headerSource()}
 
       // Bilateral
@@ -54,9 +55,9 @@ class BilateralGenerator extends FilterGenerator {
       in vec3 interpolatedTextureCoordinate;
 
       // Radius
-      const int r = 2;
-      const float sigma_s = 5.0;
-      const float sigma_r = 1000.0;
+      const int r = ${range};
+      const float sigma_s = float(${sigma_px});
+      const float sigma_r = 50.0;
       const float sigma_s2 = sigma_s * sigma_s;
       const float sigma_r2 = sigma_r * sigma_r;
       const float pi = 3.1415926535897932384626433832795;
@@ -77,12 +78,13 @@ class BilateralGenerator extends FilterGenerator {
         for (int i = -r; i <= r; i++) {
           for (int j = -r; j <= r; j++) {
             for (int k = -r; k <= r; k++) {
-              vec3 offset = vec3(i,j,k) * textureToPixel;
+              vec3 offset_px = vec3(i,j,k);
+              vec3 offset = offset_px * textureToPixel;
               vec3 neighbor = interpolatedTextureCoordinate + offset;
               float neighborStrength = float(texture(inputTexture0, neighbor).r);
 
               float ww = 0.0;
-              ww = gaussian ( distance(offset, interpolatedTextureCoordinate), sigma_s, sigma_s2 ) ;
+              ww = gaussian ( length(offset_px), sigma_s, sigma_s2 ) ;
               ww *= gaussian ( background - neighborStrength, sigma_r, sigma_r2 );
               w += ww;
               v += ww * neighborStrength;
